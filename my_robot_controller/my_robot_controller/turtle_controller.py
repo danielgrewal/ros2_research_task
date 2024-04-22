@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 
+# This script sets up a ROS2 node using Python that controls a 
+# turtle in the turtlesim simulation by responding to its position and changing 
+# its movement and pen settings.
+
+# imports necessary modules and message types for interacting with the turtlesim 
+# and manipulating its movement (Twist), position (Pose), and drawing properties 
+# (SetPen service).
 import rclpy
 from rclpy.node import Node
 from turtlesim.msg import Pose
@@ -7,17 +14,29 @@ from geometry_msgs.msg import Twist
 from turtlesim.srv import SetPen
 from functools import partial
 
+# TurtleControllerNode class inherits from Node, enabling it to function as a ROS2 node
 class TurtleControllerNode(Node):
     
+    # Constructor initializes the node with the name "turtle_controller" and
+    # creates a publisher to send commands to the turtle's velocity control topic 
+    # (/turtle1/cmd_vel) and a subscriber to receive the turtle's current position 
+    # from the pose topic (/turtle1/pose).
     def __init__(self):
         super().__init__("turtle_controller")
+        
+        # self.previous_x_ is initialized to track the turtle's previous x-coordinate 
+        # to determine when it crosses a specific point in its path. 
         self.previous_x_ = 0
+        
         self.cmd_vel_publisher_ = self.create_publisher(
             Twist, "/turtle1/cmd_vel", 10)
         self.pose_subscriber_ = self.create_subscription(
             Pose, "/turtle1/pose", self.pose_callback, 10)
         self.get_logger().info("Turtle controller has been started.")
 
+    # This method handles pose messages. If the turtle is near the boundary of the defined area, 
+    # it slows down and turns; otherwise, it moves faster and straight.
+    # It also checks if the turtle crosses the middle of the area to change the pen color.
     def pose_callback(self, pose: Pose):
         # When a Pose msg is received, create a Twist (geomtry msg)
         cmd = Twist()
@@ -48,13 +67,15 @@ class TurtleControllerNode(Node):
             self.get_logger().info("Set color to green")
             self.call_set_pen_service(0, 255, 0, 3, 0)
         
-    # service to change the color of the pen trace of the turtle based on its position
+    # This method changes the color and width of the pen used by the turtle based on its x-coordinate. 
+    # It does so by making an asynchronous service call to /turtle1/set_pen.
     def call_set_pen_service(self, r, g, b, width, off):
         # similiar to topics, services require a type (SetPen) and a name /turtle1/set_pen
         client = self.create_client(SetPen, "/turtle1/set_pen")
         # after 1 second of waiting for the service, print a message
         while not client.wait_for_service(1.0):
             self.get_logger().warn("waiting for service...")
+            
         # create the request object
         request = SetPen.Request()
         request.r = r
@@ -73,7 +94,8 @@ class TurtleControllerNode(Node):
         # add a call back for the future response
         future.add_done_callback(partial(self.callback_set_pen))
         
-    # callback for when the service replies with a response
+    # Callback for when the service replies with a response
+    # Handles the response from the SetPen service call, including error handling if the service call fails
     def callback_set_pen(self, future):
         # handle exception in case the service fails
         try:
@@ -82,7 +104,9 @@ class TurtleControllerNode(Node):
             # but for changing the pen color, we do not need to do anything with response
         except Exception as e:
             self.get_logger().error("Service call failed: %r" % (e,))
-    
+
+# Main method initializes the ROS2 client library, creates an instance of TurtleControllerNode, 
+# keeps the node running to listen for messages and service responses, and cleans up on exit.  
 def main(args=None):
     rclpy.init(args=args)
     node = TurtleControllerNode()
